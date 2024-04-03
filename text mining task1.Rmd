@@ -1,0 +1,939 @@
+---
+title: "comparison of legislative texts"
+author: "Nadia Napolano"
+date: "2024-03-24"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+The objective of this analysis is to compare the constitutional texts or texts establishing the fundamental rights of the citizen of 4 countries and the European Union.
+
+The hypothesis on which this study is based is that traces of each country's culture and history can be found in the main legislative texts of each country.
+We begin by obtaining the data through data harvesting strategies.
+
+```{r, warning=FALSE}
+library(rvest) # to get the data
+library(tidytext) # to order the text
+library(textdata)
+library(ggplot2) #to visualize information
+library(dplyr) #to manage dataframe
+library(forcats) # to vizualize data
+library(ggraph)#to optain graphs of networks
+library(RColorBrewer)#data visualization
+```
+
+
+The Constitution of Spain
+```{r,  warning=FALSE}
+
+library(rvest)
+url <- "https://www.senado.es/web/conocersenado/normas/constitucion/detalleconstitucioncompleta/index.html?lang=en"
+spagna_text <- url |> 
+  read_html() |> 
+  html_nodes(xpath = '//p[@class="p_top"]') |> 
+  html_text()
+```
+
+The Declaration of independence, USA
+```{r,  warning=FALSE}
+url <- "https://portal.ct.gov/SOTS/Register-Manual/Section-I/Declaration-of-Independence-US-Constitution#:~:text=We%2C%20therefore%2C%20the%20Representatives%20of,that%20these%20United%20Colonies%20are%2C"
+
+USA_text <- url %>%
+  read_html() %>%
+  html_nodes(xpath = '//p[font[@color="#000000"]]') %>%
+  html_text()
+```
+
+The Constitution of South Africa
+
+```{r}
+
+url <- "https://www.westerncape.gov.za/legislation/bill-rights-chapter-2-constitution-republic-south-africa"
+southafrica_text <- url |> 
+  read_html() |> 
+  html_nodes(xpath = '//td[@valign="top"]') |> 
+  html_text()
+```
+
+Charter of Fundamental Rights of the European Union
+
+```{r}
+library(rvest)
+url <- "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:12012P/TXT"
+
+page <- read_html(url)
+ue_text<- url |> 
+  read_html() |> 
+  html_nodes(xpath = '//p[@class="normal"]') |> 
+  html_text()
+
+```
+
+Italy, The constitution of 1948
+
+```{r}
+
+
+url <- "https://www.refworld.org/legal/legislation/natlegbod/1947/en/13703"
+page <- read_html(url)
+testo_it <- page |> 
+  html_nodes("p") |> 
+  html_text()
+testo_it<- gsub("\\d+", "", testo_it)
+
+testo_it <- gsub("This is not a UNHCR publication. UNHCR is not responsible for, nor does it necessarily endorse, its content. Any views expressed are solely those of the author or publisher and do not necessarily reflect those of UNHCR, the United Nations or its Member States.", "", testo_it)
+
+testo_it <- gsub("\\(\\)", "", testo_it)
+
+testo_it <- gsub("Search", "", testo_it)
+
+```
+
+## text cleaning
+
+Italy
+
+```{r,  warning=FALSE}
+library(dplyr)
+library(tidytext)
+testoit_df <- tibble(line = 1:383, text = testo_it)
+testoit_df<- testoit_df |> 
+  unnest_tokens(word, text) 
+testoit_df <- testoit_df |> 
+  anti_join(stop_words, by = "word")
+
+```
+
+EU
+```{r}
+ue_text <- gsub("PREAMBLE", "", ue_text)
+ue_text <- gsub("\\d+", "", ue_text )
+ue_text <- gsub("TITLE", "", ue_text )
+ue_text <- gsub("I", "", ue_text )
+ue_text <- gsub("II", "", ue_text )
+ue_text <- gsub("V", "", ue_text )
+testoue_df <- tibble(line = 1:length(ue_text), text = ue_text)
+
+testoue_df<- testoue_df |> 
+  unnest_tokens(word, text) 
+testoue_df <- testoue_df |> 
+  anti_join(stop_words, by = "word")
+```
+
+South africa
+
+```{r}
+southafrica_text <- gsub("\u00E2", "", southafrica_text)
+southafrica_text <- gsub("\\d+", "", southafrica_text)
+southafrica_text <- gsub("i ", "", southafrica_text)
+southafrica_text <- gsub("ii", "", southafrica_text)
+southafrica_text <- gsub("b ", "", southafrica_text)
+
+
+testoSA_df <- tibble(line = 1:length(southafrica_text), text = southafrica_text)
+
+testoSA_df <- testoSA_df |> 
+  unnest_tokens(word, text)
+
+testoSA_df <- testoSA_df |> 
+  anti_join(stop_words, by = "word")
+testoSA_df <- testoSA_df |> 
+  filter(nchar(word) > 1)
+# the letter "â" was really difficult to take away from the dataset
+testoSA_df <- testoSA_df %>%
+  filter(!grepl("â", word))
+```
+
+USA
+
+```{r}
+USA_text <- gsub("\\d+", "", USA_text)
+USA_text <- gsub("i ", "", USA_text)
+USA_text <- gsub("ii", "", USA_text)
+USA_text <- gsub("b ", "", USA_text)
+
+
+testoUSA_df <- tibble(line = 1:length(USA_text), text = USA_text)
+
+
+testoUSA_df <- testoUSA_df |> 
+  unnest_tokens(word, text)
+
+testoUSA_df <- testoUSA_df |> 
+  anti_join(stop_words, by = "word")
+testoUSA_df <- testoUSA_df |> 
+  filter(nchar(word) > 1)
+```
+
+SPAIN
+
+```{r}
+spagna_text <- gsub("\\d+", "", spagna_text)
+spagna_text <- gsub("i ", "", spagna_text)
+spagna_text <- gsub("ii", "", spagna_text)
+spagna_text <- gsub("don", "", spagna_text)
+
+
+testoes_df <- tibble(line = 1:length(spagna_text), text = spagna_text)
+
+
+testoes_df <- testoes_df |> 
+  unnest_tokens(word, text)
+
+
+testoes_df <- testoes_df |> 
+  anti_join(stop_words, by = "word")
+testoUSA_df <- testoUSA_df |> 
+  filter(nchar(word) > 1)
+```
+
+
+## words distribution
+Let's observe the distribution of the words
+
+Italy
+```{r}
+
+it_words <- testoit_df |> 
+  count( word, sort = TRUE)
+
+total_words_it <- it_words |> 
+  summarize(total = sum(n))
+
+total_words_it
+it_words <- it_words |> 
+  mutate(term_frequency = n/3955)
+
+it_words
+```
+
+```{r,  warning=FALSE}
+library(ggplot2)
+
+testoit_df |> 
+  count(word, sort = TRUE) |> 
+  filter(n > 20) |> 
+  mutate(word = reorder(word, n)) |> 
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(y = NULL)
+```
+
+These words do not surprise me; the Italian Constitution, written in 1948, is divided into two parts: the first is about the principles of the state and the rights and duties of the citizen, while the second explains concretely how the republic functions.
+Therefore, I will try to filter the first 54 articles to get the initial part, which in my opinion can give excellent insights.
+The last word is progressivity of the first part, line 135.
+
+
+```{r}
+testoit_df_principles <- testoit_df |> 
+  filter(line <= 135)
+testoit_df_principles |> 
+  count(word, sort = TRUE) |> 
+  filter(n > 5) |> 
+  mutate(word = reorder(word, n)) |> 
+
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(y = NULL)
+
+```
+
+In the text we find words that refer to the socialist party such as: labor and workers.
+This is not surprising since the constitution was written after the fascist dictatorship and after World War II, this also explains the words equal and free.
+I was expecting words like peace, war or women which are not mentioned as often instead.
+I am very curious to see the analysis of Spain, a European country that wrote the constitution in 1972 after the end of the Franco dictatorship.
+
+Spain
+
+```{r}
+
+es_words <- testoes_df |> 
+  count( word, sort = TRUE)
+es_words
+```
+
+The first words again refer to the political structure of the nation,an 'interesting difference from italy is the word "King," considering the Spanish monarchical structure.
+Here again the first principles we see are: social, freely, independence, solidarity, equal.
+
+The structure of the Spanish legal text is similar to the Italian one, so for the chart I will select only the first part, up to line 186.
+
+```{r}
+testoes_df_principles <- testoes_df |> 
+  filter(line <= 186)
+
+testoit_df_principles |> 
+  count(word, sort = TRUE) |> 
+  filter(n > 5) |> 
+  mutate(word = reorder(word, n)) |> 
+  
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(y = NULL)
+```
+
+I find it very interesting that the Constitution uses the term Person, I find it very beautiful.
+Not only do we find the word free repeated often, but also freedom.
+
+South Africa I chose this country because I was very curious to see what kind of differences there might be between very distinct countries with very different backgrounds and histories.
+The Constitution of South Africa (Constitution of South Africa), formulates the law of the state of South Africa.
+It provides the legal basis for the existence of the republic, establishes the human rights and duties of citizens, and defines the structure of government.
+
+The current constitution, the country's fifth, was drafted by South Africa's parliament elected in 1994 at a general election, the first with universal suffrage and without racial discrimination.
+It was promulgated by President Nelson Mandela on December 18, 1996, and actually came into effect on February 4, 1997.
+
+```{r}
+
+testoSA_df |> 
+  count(word, sort = TRUE) |> 
+  filter(n > 5) |> 
+  mutate(word = reorder(word, n)) |> 
+
+  
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(y = NULL)
+
+```
+
+Compared to the previous two texts, I would like to emphasize that this text refers to the rights and principles of the country.
+The words that are repeated the most are right the person and freedom, even before law.
+The South African constitution has completely different words from Spain and Italy, which were more similar.
+It talks about time, child, care, health, nature, fair, equitable.
+And there is also a word that I consider splendid: dignity.
+
+USA
+
+```{r}
+
+testoUSA_df |> 
+  count(word, sort = TRUE) |> 
+  filter(n > 10) |> 
+  mutate(word = reorder(word, n)) |> 
+
+  
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(y = NULL)
+
+```
+
+I am aware that comparing the Declaration of Independence, a text from 1776, with the constitutions of modern states may be considered anachronistic.
+Despite the addition of 12 amendments and other articles in 1992, it is questionable to compare this text with more recent ones.
+However, I was very curious and my theory was confirmed: I was certain that the word "president" would be the most repeated.
+
+Last, I left one of the most beautiful legal texts I have ever read: Charter of Fundamental Rights of the European Union.
+It is a text from 2007, very recent, I included it because we could consider it representative of future trends and hopes.
+
+```{r}
+testoue_df |> 
+  count(word, sort = TRUE) |> 
+  filter(n > 5) |> 
+  mutate(word = reorder(word, n)) |> 
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(y = NULL)
+```
+
+Obviously Union is the most repeated word, again there are very interesting words here: human, person, life,free,protection, access.
+No reference to unipersonal powers like the president.
+I expected perhaps some reference to labor and peace which are present in the Text, but not as much as I supposed.
+
+## Sentiment analysis
+
+Let's try to see if there is any positive or negative path in this law texts.
+
+Italy
+
+```{r,  warning=FALSE}
+library(textdata)
+library(dplyr)
+library(ggplot2)
+
+merged_df <- testoit_df %>%
+  left_join(get_sentiments("bing"), by = c("word" = "word")) %>%
+  filter(!is.na(sentiment))  
+
+top_words <- merged_df %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 25)
+
+top_words <- top_words %>%
+  mutate(word = reorder(word, n))
+top_words <- merge(top_words, merged_df, by = "word")
+
+
+# Create the graph!
+ggplot(top_words, aes(x = n, y = word, fill = sentiment)) +
+  geom_col() +
+  scale_fill_manual(values = c("positive" = "green", "negative" = "red")) + 
+  labs(y = NULL) +
+  theme_minimal()  
+```
+
+There are many words that are considered neutral in the text, but overall I would say that it is the positive sentiment that prevails.
+
+Spain
+
+```{r}
+merged_df <- testoes_df %>%
+  left_join(get_sentiments("bing"), by = c("word" = "word")) %>%
+  filter(!is.na(sentiment)) 
+
+top_words <- merged_df %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 25)
+
+top_words <- top_words %>%
+  mutate(word = reorder(word, n))
+top_words <- merge(top_words, merged_df, by = "word")
+
+
+ggplot(top_words, aes(x = n, y = word, fill = sentiment)) +
+  geom_col() +
+  scale_fill_manual(values = c("positive" = "green", "negative" = "red")) +  
+  labs(y = NULL) +
+  theme_minimal()  
+```
+Even in this case, i think, it's the positive sentiment to prevail
+UE
+
+```{r}
+#i used bing because it was the most clear and the results were consistent
+merged_df <- testoue_df %>%
+  left_join(get_sentiments("bing"), by = c("word" = "word")) %>%
+  filter(!is.na(sentiment))  
+# for the graph i only consider the top 25
+top_words <- merged_df %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 25)
+
+top_words <- top_words %>%
+  mutate(word = reorder(word, n))
+top_words <- merge(top_words, merged_df, by = "word")
+
+
+ggplot(top_words, aes(x = n, y = word, fill = sentiment)) +
+  geom_col() +
+  scale_fill_manual(values = c("positive" = "green", "negative" = "red")) + 
+  labs(y = NULL) +
+  theme_minimal()  
+```
+
+the language in this legal text seems to me to be completely distinct; it is more intense than in a normal legal text.
+
+```{r}
+merged_df <- testoSA_df %>%
+  left_join(get_sentiments("bing"), by = c("word" = "word")) %>%
+  filter(!is.na(sentiment)) 
+top_words <- merged_df %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 25)
+
+top_words <- top_words %>%
+  mutate(word = reorder(word, n))
+top_words <- merge(top_words, merged_df, by = "word")
+
+
+ggplot(top_words, aes(x = n, y = word, fill = sentiment)) +
+  geom_col() +
+  scale_fill_manual(values = c("positive" = "green", "negative" = "red")) + 
+  labs(y = NULL) +
+  theme_minimal() 
+```
+
+We see a certain balance between negative and positive expressions, I also notice a word that had not yet been seen in the selected texts: discriminatory.
+
+```{r}
+merged_df <- testoUSA_df %>%
+  left_join(get_sentiments("bing"), by = c("word" = "word")) %>%
+  filter(!is.na(sentiment)) 
+
+top_words <- merged_df %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n = 25)
+
+top_words <- top_words %>%
+  mutate(word = reorder(word, n))
+top_words <- merge(top_words, merged_df, by = "word")
+
+
+ggplot(top_words, aes(x = n, y = word, fill = sentiment)) +
+  geom_col() +
+  scale_fill_manual(values = c("positive" = "green", "negative" = "red")) +  
+  labs(y = NULL) +
+  theme_minimal()  
+```
+
+Of all the texts chosen this graph seems to show the greatest presence of negative feelings!
+
+## wordcloud
+
+This is a tool that allows you to graphically and easily summarize previously collected information.
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+testoit_df_principles |> 
+  count(word) |> 
+  #we use the wordcloud function
+  with(wordcloud(word, n, max.words = 60,colors = brewer.pal(8, 'Dark2') ))
+```
+
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+testoes_df_principles |> 
+  count(word) |> 
+  #we use the wordcloud function
+  with(wordcloud(word, n, max.words = 60,colors = brewer.pal(8, 'Dark2') ))
+```
+
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+testoSA_df |> 
+  count(word) |> 
+  #we use the wordcloud function
+  with(wordcloud(word, n, max.words = 60,colors = brewer.pal(8, 'Dark2') ))
+```
+
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+testoue_df |> 
+  count(word) |> 
+  #we use the wordcloud function
+  with(wordcloud(word, n, max.words = 60,colors = brewer.pal(8, 'Dark2') ))
+```
+
+```{r}
+library(wordcloud)
+library(RColorBrewer)
+
+testoUSA_df |> 
+  count(word) |> 
+  #we use the wordcloud function
+  with(wordcloud(word, n, max.words = 60,colors = brewer.pal(8, 'Dark2') ))
+```
+
+## Looking for words
+
+```{r}
+lista_dataframes <- list(testoes_df = testoes_df,
+                         testoit_df = testoit_df,
+                         testoue_df = testoue_df,
+                         testoUSA_df = testoUSA_df,
+                         testoSA_df = testoSA_df)
+
+words_searched <- c("ethnicity", "love", "hate")
+
+# new vector
+results <- vector(mode = "list", length = length(lista_dataframes))
+
+
+for (word in words_searched) {
+  # looking for the word
+  for (i in seq_along(lista_dataframes)) {
+    df <- lista_dataframes[[i]]
+    present <- word %in% df$word
+    repetition<- sum(df$word == word)
+    results[[i]] <- list(word = word, present = present, repetition = repetition)
+  }
+
+  # the results dataframe
+  risultati_df <- data.frame(Dataframe = names(lista_dataframes),
+                             word = word,
+                             Present = sapply(results, function(x) x$present),
+                             Repetition = sapply(results, function(x) x$repetition))
+
+  #the barplot
+  print(ggplot(risultati_df, aes(x = Dataframe, y = Repetition, fill = Present)) +
+          geom_bar(stat = "identity") +
+          scale_fill_manual(values = c("red", "green"), labels = c("absent", "present")) +
+          labs(x = "Dataframe", y = "number of repetition", fill = "presence of the word") +
+          theme_minimal() +
+          geom_text(aes(label = Repetition), vjust = -0.5, color = "black") + 
+          ggtitle(paste("word:", word)))  
+}
+
+```
+I am romantic so i was curious of knowing if the word "love" was in any of the text, but apparently it is not the love that pushes the law; than i look for another strong word: "hate", this word was absent too; and then "ethnicity", that was written only in the Constitution of South Africa. This is explained by the story of that Country, who faced the apartheid since 1948 until 1991.
+```{r}
+lista_dataframes <- list(testoes_df = testoes_df,
+                         testoit_df = testoit_df,
+                         testoue_df = testoue_df,
+                         testoUSA_df = testoUSA_df,
+                         testoSA_df = testoSA_df)
+
+words_searched <- c("sexual", "dignity", "women")
+
+# new vector
+results <- vector(mode = "list", length = length(lista_dataframes))
+
+
+for (word in words_searched) {
+  # looking for the word
+  for (i in seq_along(lista_dataframes)) {
+    df <- lista_dataframes[[i]]
+    present <- word %in% df$word
+    repetition<- sum(df$word == word)
+    results[[i]] <- list(word = word, present = present, repetition = repetition)
+  }
+
+  # the results dataframe
+  risultati_df <- data.frame(Dataframe = names(lista_dataframes),
+                             word = word,
+                             Present = sapply(results, function(x) x$present),
+                             Repetition = sapply(results, function(x) x$repetition))
+
+  #the barplot
+  print(ggplot(risultati_df, aes(x = Dataframe, y = Repetition, fill = Present)) +
+          geom_bar(stat = "identity") +
+          scale_fill_manual(values = c("red", "green"), labels = c("absent", "present")) +
+          labs(x = "Dataframe", y = "number of repetition", fill = "presence of the word") +
+          theme_minimal() +
+          geom_text(aes(label = Repetition), vjust = -0.5, color = "black") + 
+          ggtitle(paste("word:", word)))  
+}
+```
+"Sexual" was in the European  Charter of Fundamental Rights o and in the South Africa constitution.
+"Dignity" a word that represents and ensures the importance of each one of the citizens was in every text, except in USA.
+I was not expecting it, but Italy, my country, uses the most the word "women" in its Constitution.
+
+```{r}
+lista_dataframes <- list(testoes_df = testoes_df,
+                         testoit_df = testoit_df,
+                         testoue_df = testoue_df,
+                         testoUSA_df = testoUSA_df,
+                         testoSA_df = testoSA_df)
+
+words_searched <- c("war", "peace", "president", "arts", "art")
+
+# new vector
+results <- vector(mode = "list", length = length(lista_dataframes))
+
+
+for (word in words_searched) {
+  # looking for the word
+  for (i in seq_along(lista_dataframes)) {
+    df <- lista_dataframes[[i]]
+    present <- word %in% df$word
+    repetition<- sum(df$word == word)
+    results[[i]] <- list(word = word, present = present, repetition = repetition)
+  }
+
+  # the results dataframe
+  risultati_df <- data.frame(Dataframe = names(lista_dataframes),
+                             word = word,
+                             Present = sapply(results, function(x) x$present),
+                             Repetition = sapply(results, function(x) x$repetition))
+
+  #the barplot
+  print(ggplot(risultati_df, aes(x = Dataframe, y = Repetition, fill = Present)) +
+          geom_bar(stat = "identity") +
+          scale_fill_manual(values = c("red", "green"), labels = c("absent", "present")) +
+          labs(x = "Dataframe", y = "number of repetition", fill = "presence of the word") +
+          theme_minimal() +
+          geom_text(aes(label = Repetition), vjust = -0.5, color = "black") + 
+          ggtitle(paste("word:", word)))  
+}
+```
+Only the EU Text doesn't use the word "war", but seems incredible that in the USA declaration of independence it is repeated ten times.The word "peace" is used less times than the word "war", maybe it was considered less impactful.
+THe word "president" surprised me a lot, in the Text of USA it is repeated 122 times, this make sense if we think how much importance and relevance and power the president us there.
+Then i looked for the "art", i was wishing that my country, who owes a lot to its art, had given some credit to it in its Constitution, and they did it! as well as the European Union and in Usa's declaration too.
+## N-grams
+An n-gram is a sequence of n adjacent symbols in particular order. 
+In this case I will try to find a path in the way the words are paired.
+```{r}
+
+it_bigrams <- testoit_df_principles %>%
+  mutate(bigram = paste(word, lag(word), sep = " ")) %>%
+  filter(!is.na(bigram))  
+it_bigrams <- it_bigrams %>%
+  filter(!grepl("NA", bigram))
+
+head(it_bigrams)
+
+it_bigrams %>%
+  count(bigram, sort = TRUE)
+```
+Since it is a legal text there is an emphasis on the force of law that enhances this text and makes it coercive; there are also two interesting correlations: public-private and social-economic. Union- trade is also mentioned; after the dictatorship and World War II, Italy was trying to recover its trade relations after years of autarky.
+```{r}
+
+es_bigrams <- testoes_df_principles %>%
+  mutate(bigram = paste(word, lag(word), sep = " ")) %>%
+  filter(!is.na(bigram))  
+
+#deleting Na's
+es_bigrams <- es_bigrams %>%
+  filter(!grepl("NA", bigram))
+
+
+es_bigrams %>%
+  count(bigram, sort = TRUE)
+```
+Again absolute prevalence of words associated with power and legitimacy of acts, probably as a result of the dictatorship they were trying to empower institutions.
+
+South Africa
+```{r}
+#separating columns and then pasting to create the bigram
+SA_bigrams <- testoSA_df %>%
+  mutate(bigram = paste(word, lag(word), sep = " ")) %>%
+  filter(!is.na(bigram)) 
+
+
+SA_bigrams <- SA_bigrams %>%
+  filter(!grepl("NA", bigram))
+
+
+head(SA_bigrams)
+
+SA_bigrams %>%
+  count(bigram, sort = TRUE)
+
+```
+Very different from what was observed for Italy and Spain, here the society of citizens, of human beings, stands out: health-care, dignity-human, rights-bill.
+
+European Union
+```{r}
+
+ue_bigrams <- testoue_df %>%
+  mutate(bigram = paste(word, lag(word), sep = " ")) %>%
+  filter(!is.na(bigram))  
+
+
+ue_bigrams <- ue_bigrams %>%
+  filter(!grepl("NA", bigram))
+
+head(ue_bigrams)
+
+ue_bigrams %>%
+  count(bigram, sort = TRUE)
+```
+Here reference is made to the role of European institutions and the laws of member countries, clarifying the coexistence of these two aspects within the Union.
+
+USA
+
+```{r}
+
+USA_bigrams <- testoUSA_df %>%
+  mutate(bigram = paste(word, lag(word), sep = " ")) %>%
+  filter(!is.na(bigram))  
+
+USA_bigrams <- USA_bigrams %>%
+  filter(!grepl("NA", bigram))
+
+
+USA_bigrams %>%
+  count(bigram, sort = TRUE)
+```
+Absolute predominance of the role of the president, the powers of the state, and the institutions that represent it.
+
+## bigram graph
+
+Graphs to represent the relationship between words in texts and their "laws of attraction."
+
+I created a function to make automatic the process.
+```{r, warning=FALSE}
+library(tidyr)
+library(dplyr)
+library(ggraph)  #package for bigram network's relationship
+library(grid)
+
+create_bigram_graph <- function(df, min_occurrences = 5, num_top_words = 10) {
+  # Separate the bigram column into two columns word1 and word2
+  df <- df %>%
+    separate(bigram, into = c("word1", "word2"), sep = " ")
+  
+  # Count the occurrences of bigrams
+  bigram_counts <- df %>% 
+    count(word1, word2, sort = TRUE)
+  
+  # Filter bigrams with a number of occurrences greater than the minimum value
+  bigram_for_graph <- bigram_counts %>%
+    filter(n > min_occurrences)
+  
+  # Use ggraph to create the graph
+  set.seed(2020)
+  a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+  g <- ggraph(bigram_for_graph, layout = "fr") +
+    geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                   arrow = a, end_cap = circle(.07, 'inches')) +
+    geom_node_point(color = "lightblue", size = 5) +
+    geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+    theme_void()
+  
+  return(g)
+}
+
+# Usage of the function to create the graph
+bigram_graph <- create_bigram_graph(es_bigrams, min_occurrences = 3)
+bigram_graph
+```
+
+Recall that Spain is the only chosen territorial entity of a monarchical nature; this explains the frequent presence of words such as "king," "crown," and "prince," which are connected in the graph by the number of times they appear together.
+Italy
+
+```{r}
+bigram_graph <- create_bigram_graph(it_bigrams, min_occurrences = 3)
+bigram_graph
+```
+
+South Africa
+```{r}
+bigram_graphSA <- create_bigram_graph(SA_bigrams, min_occurrences = 3)
+bigram_graphSA
+```
+
+European Union
+```{r}
+bigram_graph_ue <- create_bigram_graph(ue_bigrams, min_occurrences = 3)
+bigram_graph_ue
+```
+
+USA
+```{r}
+bigram_graph_USA <- create_bigram_graph(USA_bigrams, min_occurrences = 5)
+bigram_graph_USA
+```
+
+## distinctivity of words
+
+Creation of the merged data frame.
+```{r}
+library(dplyr)
+# Add a new column named "country" with the value "Italy" to testoit_df
+testoit_df_principles <- testoit_df_principles %>%
+  mutate(country = "Italy")
+testoSA_df <- testoSA_df %>%
+  mutate(country = "South Africa")
+testoes_df_principles <- testoes_df_principles %>%
+  mutate(country = "Spain")
+testoUSA_df <- testoUSA_df |> 
+  mutate(country = "USA") 
+  testoue_df<- testoue_df |> mutate(country= " European union")
+
+merged_df <- bind_rows(testoit_df_principles, testoSA_df, testoes_df_principles, testoUSA_df, testoue_df)
+```
+
+
+Analysis of the frequence by rank.
+```{r}
+# Group by word and country, calculate the frequency of each word-country pair,
+# and then ungroup the dataframe
+merged_df <- merged_df %>%
+  group_by(word, country) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
+# Group by country, calculate the term frequency of each word within each country
+merged_df <- merged_df %>%
+  group_by(country) %>%
+  mutate(term_frequency = n / sum(n))
+
+# Group by country, calculate the rank of each word within each country,
+# and then ungroup the dataframe
+freq_by_rank <- merged_df %>% 
+  group_by(country) %>% 
+  mutate(rank = row_number()) %>%
+  ungroup()
+
+# Plot the term frequency by rank for each country
+freq_by_rank %>% 
+  ggplot(aes(rank, term_frequency, color = country)) + 
+  # Plot settings
+  geom_line(linewidth = 1.1, alpha = 0.8, show.legend = TRUE) +
+  scale_x_log10() +
+  scale_y_log10()
+
+```
+As the frequency of words increases, the rank moves away from the top places.
+## The tf-idf!
+
+The tf-idf weight function is a function used in information retrieval to measure the importance of a term relative to a collection of documents.
+```{r}
+
+law_tf_idf <- merged_df %>%
+  bind_tf_idf(word, country, n)
+
+law_tf_idf
+```
+In the previous chunk the numerical values are computed, but the best way to see and understand them, it's graphically
+```{r}
+law_tf_idf %>%
+  #we arrange by tf-idf in descending order
+  arrange(desc(tf_idf))
+```
+
+The graphs
+```{r, warning=FALSE}
+library(forcats)
+
+law_tf_idf %>%
+  group_by(country) %>%
+  #choose maximum number of words
+  slice_max(tf_idf, n = 10) %>%
+  ungroup() %>%
+  ggplot(aes(tf_idf, fct_reorder(word, tf_idf), fill = country)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~country, ncol = 2, scales = "free") +
+  labs(x = "tf-idf", y = NULL)
+```
+I would like to specify that I am aware that the European Union is not a country, the use of the term "country" in this case is improper and has only a functional purpose.
+
+
+The European text is distinguished by the use of "union" and "nations" as well as "levels."
+Going a bit to highlight its role as a union of countries with a common purpose.
+
+Italy is recognized by terms such as "school," "fulfillment," and "republic." I was surprised by the word "school," apparently in other legal texts it plays a less prominent role.
+
+The Spanish text would seem to be a text about Spain for Spain's sake, the distinguishing words are all centered on the country itself.
+
+The South African text retains in its distintino aspect the "past" and somewhat obscure words that explain its history: "unfair" and "silent."
+
+The U.S. text summarizes the country's political power.
+
+## Sparsity
+```{r}
+calculate_sparsity <- function(df) {
+  library(dplyr)
+  
+  # Count the frequency of each word
+  word_counts <- df %>%
+    count(word)
+  
+  # Calculate the total number of words
+  total_words <- sum(word_counts$n)
+  
+  # Calculate the number of unique words
+  unique_words <- nrow(word_counts)
+  
+  # Calculate the sparsity
+  sparsity <- 1 - (unique_words / total_words)
+  
+  # Return the sparsity value
+  return(sparsity)
+}
+```
+```{r}
+calculate_sparsity(testoes_df)
+calculate_sparsity(testoit_df)
+calculate_sparsity(testoSA_df)
+calculate_sparsity(testoUSA_df)
+calculate_sparsity(testoue_df)
+```
+The higher the sparsity, the more different the words in the text and the less they are repeated. This may indicate greater lexical variety in the text; therefore, the Spanish text shows greater linguistic breadth than the others (although we must consider that the analysis is not done on the original language text).
+
+
+
+The analysis was very challenging for me to do, and I was able to learn a lot. I hope the results are worthwhile and can provide consistency.
+
+-Nadia
